@@ -7,3 +7,6 @@
 out
 gen
 bin
+
+*/.idea/workspace.xml
+*/.idea/tasks.xml
