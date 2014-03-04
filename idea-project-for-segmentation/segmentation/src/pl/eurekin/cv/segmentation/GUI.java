@@ -15,10 +15,11 @@ public class GUI {
 
     public static final Color FOREGROUND = Color.RED;
     public static final Color BACKGROUND = Color.BLUE;
+    public static BufferedImage image;
 
     public static void main(String[] args) throws IOException, InvocationTargetException, InterruptedException {
         String imageFile = "/flying-eagle-wallpaper.jpg";
-        final BufferedImage image = ImageIO.read(GUI.class.getResourceAsStream(imageFile));
+        image = ImageIO.read(GUI.class.getResourceAsStream(imageFile));
 
         EventQueue.invokeLater(new Runnable() {
             @Override
@@ -48,8 +49,19 @@ public class GUI {
         });
     }
 
-    private static void segment(BufferedImage overlay) {
+    private static void segment(final BufferedImage overlay) {
 
+        new Segmentation(image, new Segmentation.FgOrBg() {
+            @Override
+            public boolean isBackground(int x, int y) {
+                return overlay.getRGB(x, y) == BACKGROUND.getRGB();
+            }
+
+            @Override
+            public boolean isForeground(int x, int y) {
+                return overlay.getRGB(x, y) == FOREGROUND.getRGB();
+            }
+        });
     }
 
     public static final class LayerUi<T extends JComponent> extends LayerUI<T> {
