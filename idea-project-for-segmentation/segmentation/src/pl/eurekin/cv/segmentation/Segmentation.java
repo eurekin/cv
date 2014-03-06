@@ -8,7 +8,10 @@ import java.util.HashSet;
 import java.util.LinkedList;
 
 public class Segmentation {
-    private static final double A_LOT_BUT_SHOULD_BE_K = 1e10;
+    private static final double A_LOT_BUT_SHOULD_BE_K = 100;
+    private final int w;
+    private final int h;
+    private final BufferedImage image;
     Node source, terminal;
     Node[][] nodes;
     int[] histogramBg = new int[255];
@@ -22,8 +25,9 @@ public class Segmentation {
     private double debugWeightsOnEdgesMax;
 
     public Segmentation(BufferedImage image, FgOrBg decider) {
-        int w = image.getWidth();
-        int h = image.getHeight();
+        this.image = image;
+        w = image.getWidth();
+        h = image.getHeight();
 
         //histogram
         calculateHistograms(image, decider, w, h);
@@ -56,12 +60,12 @@ public class Segmentation {
                 } else {
                     if ((histVal = histogramFg[intensity(image.getRGB(x, y))]) > 0) {
                         double prob = (double) histVal / (double) sumBg;
-                        weightProbFg[x][y] = prob;
+                        weightProbFg[x][y] = Math.max(-Math.log(prob), 0d);
                         addEdge(terminal, node, Math.max(-Math.log(prob), 0d));
                     }
                     if ((histVal = histogramBg[intensity(image.getRGB(x, y))]) > 0) {
                         double prob = (double) histVal / (double) sumBg;
-                        weightProbBg[x][y] = prob;
+                        weightProbBg[x][y] = Math.max(-Math.log(prob), 0d);
                         addEdge(source, node, Math.max(-Math.log(prob), 0d));
                     }
                 }
@@ -112,53 +116,80 @@ public class Segmentation {
         displayDebugDoubleArrayWithMax(debugWeightsOnEdges, debugWeightsOnEdgesMax);
 
 
-        findMinCutMaxFlow();
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                findMinCutMaxFlow();
+
+            }
+        }).start();
     }
 
     private void findMinCutMaxFlow() {
-        HashSet<Edge> visitedEdges = new HashSet<Edge>();
-        HashSet<Node> visitedNodesSet = new HashSet<Node>();
-        LinkedList<Node> visitedNodesStack = new LinkedList<Node>();
+        HashSet<Edge> visitedEdges;
+        HashSet<Node> visitedNodesSet;
+        LinkedList<Node> visitedNodesStack;
 
-        LinkedList<Integer> pickedIndices = new LinkedList<Integer>();
-        boolean termination = false;
+        boolean foundAPath = false;
+        boolean thereMightBeMorePaths = true;
 
         double maxFlow;
         Edge visitingEdge = null;
-        Node visitingNode = source;
+        Node visitingNode = null;
         int iterations = 0;
 
         try {
             do {
 
+                visitedEdges = new HashSet<Edge>();
+                visitedNodesSet = new HashSet<Node>();
+                visitedNodesStack = new LinkedList<Node>();
+
+                visitingNode = source;
+                maxFlow = Double.MAX_VALUE;
 
                 do {
-                    maxFlow = Double.MAX_VALUE;
 
-
-
-                    int childCount = visitingNode.outgoingResiduals().size();
-                    int nextIndex = pickedIndices.peekLast() + 1;
-                    if(nextIndex > childCount) {
-                        // backtrack
-                        pickedIndices.removeLast();
-                        Node backtrackedNode = visitedNodesStack.removeLast();
-                        visitingNode = backtrackedNode;
-                        continue;
+                    if (!visitedNodesSet.contains(visitingNode)) {
+                        visitingNode.firstTimeVisit();
+                        visitedNodesSet.add(visitingNode);
                     }
-                    visitingEdge = visitingNode.outgoingResiduals().get(   );
-                    visitedEdges.add(visitingEdge);
-                    maxFlow = Math.min(visitingEdge.capacity, maxFlow);
 
-                    visitingNode = visitingEdge.b;
-                } while (!termination);
+                    if (visitingNode.hasNotYetSeenEdges()) {
+                        visitingEdge = visitingNode.nextEdge();
+                        if (visitingEdge.b != source) {
+                            visitedEdges.add(visitingEdge);
+                            maxFlow = Math.min(visitingEdge.capacity, maxFlow);
+
+                            visitedNodesStack.addLast(visitingNode);
+                            visitingNode = visitingEdge.b;
+                        } // else just skip it
+                    } else {
+                        if (visitedNodesStack.isEmpty()) {
+                            // FINISH
+                            thereMightBeMorePaths = false;
+                        } else {
+                            // backtrack
+                            visitingNode = visitedNodesStack.removeLast();
+                        }
+                    }
+
+                    foundAPath = visitingNode == terminal;
+                } while (!foundAPath && thereMightBeMorePaths);
 
                 for (Edge edge : visitedEdges)
                     edge.pushFlow(maxFlow);
 
+                if (iterations % 5000 == 0)
+                    lightUpTraversedNodes(visitedNodesSet, iterations);
+
                 iterations += 1;
 
-            } while(true); // :)
+            } while (thereMightBeMorePaths); // :)
+
+            showNodesReachableFromSource();
+
+            JOptionPane.showMessageDialog(null, "FINISH");
         } catch (RuntimeException e) {
             System.out.println("iterations = " + iterations);
             System.out.println("visitingEdge = " + visitingEdge);
@@ -167,13 +198,86 @@ public class Segmentation {
         }
     }
 
+    private void showNodesReachableFromSource() {
+        JFrame jFrame = new JFrame("RESULT");
+        jFrame.add(new JPanel() {
+
+            @Override
+            public Dimension getPreferredSize() {
+                return new Dimension(w, h);
+            }
+
+            @Override
+            protected void paintComponent(Graphics g) {
+                super.paintComponent(g);
+                LinkedList<Node> stack = new LinkedList<Node>();
+                HashSet<Node> visited = new HashSet<Node>();
+                Node node = source;
+
+                g.setColor(Color.black);
+                do {
+                    if(!visited.contains(node)) {
+                        node.firstTimeVisit();
+                        g.setColor(new Color(image.getRGB(node.x, node.y)));
+                        g.fillRect(node.x, node.y, 1, 1);
+                        visited.add(node);
+                    }
+
+                    if(node.hasNotYetSeenEdges()) {
+                        Edge edge = node.nextEdge();
+                        stack.add(node);
+                        node = edge.b;
+                    } else {
+                        if(!stack.isEmpty()) {
+                            node = stack.removeLast();
+                        } else {
+                            break;
+                        }
+                    }
+                } while(true);
+
+
+                g.setColor(Color.green);
+            }
+        });
+        jFrame.setResizable(false);
+        jFrame.pack();
+        jFrame.setVisible(true);
+    }
+
+    private void lightUpTraversedNodes(HashSet<Node> vs, final int iterations) {
+        final HashSet<Node> visitedNodesSet = (HashSet<Node>) vs.clone();
+        JFrame jFrame = new JFrame("IT#" + iterations + " Terminal Node weights");
+        jFrame.add(new JPanel() {
+
+            @Override
+            public Dimension getPreferredSize() {
+                return new Dimension(w, h);
+            }
+
+            @Override
+            protected void paintComponent(Graphics g) {
+                super.paintComponent(g);
+                for (Node n : visitedNodesSet) {
+                    g.fillRect(n.x, n.y, 1, 1);
+                }
+                g.setColor(Color.green);
+                g.drawString("visited #" + visitedNodesSet.size(), 0, 25);
+                g.drawString("iteration #" + iterations, 0, 55);
+            }
+        });
+        jFrame.setResizable(false);
+        jFrame.pack();
+        jFrame.setVisible(true);
+    }
+
     private int randomBelow(int max) {
         return (int) (Math.random() * max);
     }
 
     private double norm(int a, int b) {
         double d = a - b;
-        d /= 256;
+        d /= 128;
         return Math.exp(
                 ((double) -(d * d)));
     }
@@ -218,7 +322,7 @@ public class Segmentation {
                 super.paintComponent(g);
                 for (int x = 0; x < probarray.length; x++) {
                     for (int y = 0; y < probarray[0].length; y++) {
-                        int v = (int) (probarray[x][y] * 255);
+                        int v = (int) (probarray[x][y] * 20 );
                         g.setColor(new Color(v, v, v));
                         g.fillRect(x, y, 1, 1);
                     }
@@ -371,11 +475,20 @@ public class Segmentation {
     }
 
     public static class Node {
+        int index;
         int x, y;
         ArrayList<Edge> outgoing = new ArrayList<Edge>(4);
 
-        public ArrayList<Edge> outgoingResiduals() {
-            return outgoing;
+        public boolean hasNotYetSeenEdges() {
+            return index < outgoing.size();
+        }
+
+        public Edge nextEdge() {
+            return outgoing.get(index++);
+        }
+
+        public void firstTimeVisit() {
+            index = 0;
         }
 
         public void addOutgoing(Edge edge) {
