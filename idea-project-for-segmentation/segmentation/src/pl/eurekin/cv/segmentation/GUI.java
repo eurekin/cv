@@ -115,8 +115,8 @@ public class GUI {
         }
 
         private void paintDotAt(Point point, Color color) {
-            int d = 15;
-            int x = point.x, y = point.y, w = d, h = d;
+            int d = 15, r = d/2;
+            int x = point.x - r, y = point.y - r, w = d, h = d;
             Graphics2D g = (Graphics2D) overlay.getGraphics();
             g.setColor(color);
             g.fillOval(x, y, w, h);

@@ -73,8 +73,8 @@ public class Segmentation {
             }
         }
 
-        displayDebugProbDensityOf(weightProbFg);
-        displayDebugProbDensityOf(weightProbBg);
+        safelyDisplayDebugProbDensityOf(weightProbFg);
+        safelyDisplayDebugProbDensityOf(weightProbBg);
 
         debugWeightsOnEdges = new double[(image.getWidth()) * 2][image.getHeight()];
         debugWeightsOnEdgesMax = 0d;
@@ -187,7 +187,7 @@ public class Segmentation {
 
             } while (thereMightBeMorePaths); // :)
 
-            showNodesReachableFromSource();
+            safelyPublishResultBackToTheGUIThread();
 
             JOptionPane.showMessageDialog(null, "FINISH");
         } catch (RuntimeException e) {
@@ -196,6 +196,16 @@ public class Segmentation {
             System.out.println("visitingNode = " + visitingNode);
             throw e;
         }
+    }
+
+    private synchronized  void safelyPublishResultBackToTheGUIThread() {
+
+        SwingUtilities.invokeLater(new Runnable() {
+            @Override
+            public void run() {
+                showNodesReachableFromSource();
+            }
+        });
     }
 
     private void showNodesReachableFromSource() {
@@ -216,25 +226,25 @@ public class Segmentation {
 
                 g.setColor(Color.black);
                 do {
-                    if(!visited.contains(node)) {
+                    if (!visited.contains(node)) {
                         node.firstTimeVisit();
                         g.setColor(new Color(image.getRGB(node.x, node.y)));
                         g.fillRect(node.x, node.y, 1, 1);
                         visited.add(node);
                     }
 
-                    if(node.hasNotYetSeenEdges()) {
+                    if (node.hasNotYetSeenEdges()) {
                         Edge edge = node.nextEdge();
                         stack.add(node);
                         node = edge.b;
                     } else {
-                        if(!stack.isEmpty()) {
+                        if (!stack.isEmpty()) {
                             node = stack.removeLast();
                         } else {
                             break;
                         }
                     }
-                } while(true);
+                } while (true);
 
 
                 g.setColor(Color.green);
@@ -283,7 +293,7 @@ public class Segmentation {
     }
 
     private void displayDebugDoubleArrayWithMax(final double[][] probarray, final double max) {
-        JFrame jFrame = new JFrame("Terminal Node weights");
+        JFrame jFrame = new JFrame("Pairwise Node weights");
         jFrame.add(new JPanel() {
 
             @Override
@@ -308,6 +318,15 @@ public class Segmentation {
         jFrame.setVisible(true);
     }
 
+    private  void safelyDisplayDebugProbDensityOf(final double[][] probarray) {
+        SwingUtilities.invokeLater(new Runnable() {
+            @Override
+            public void run() {
+                displayDebugProbDensityOf(probarray.clone());
+            }
+        });
+    }
+
     private void displayDebugProbDensityOf(final double[][] probarray) {
         JFrame jFrame = new JFrame("Terminal Node weights");
         jFrame.add(new JPanel() {
@@ -322,7 +341,7 @@ public class Segmentation {
                 super.paintComponent(g);
                 for (int x = 0; x < probarray.length; x++) {
                     for (int y = 0; y < probarray[0].length; y++) {
-                        int v = (int) (probarray[x][y] * 20 );
+                        int v = (int) (probarray[x][y] * 20);
                         g.setColor(new Color(v, v, v));
                         g.fillRect(x, y, 1, 1);
                     }
