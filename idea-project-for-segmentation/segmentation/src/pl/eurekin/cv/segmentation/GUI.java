@@ -27,7 +27,7 @@ public class GUI {
                 JFrame frame = new JFrame();
 
                 JLabel label = new JLabel(new ImageIcon(image));
-                final LayerUi layerUi = new LayerUi();
+                final LayerUi layerUi = new LayerUi(image.getWidth(), image.getHeight());
                 JLayer<JLabel> layer = new JLayer<JLabel>(label, layerUi);
 
                 frame.add(layer);
@@ -65,7 +65,11 @@ public class GUI {
     }
 
     public static final class LayerUi<T extends JComponent> extends LayerUI<T> {
-        BufferedImage overlay = new BufferedImage(256, 256, BufferedImage.TYPE_4BYTE_ABGR);
+        BufferedImage overlay;
+
+        public LayerUi(int w, int h) {
+            overlay = new BufferedImage(w, h, BufferedImage.TYPE_4BYTE_ABGR);
+        }
 
         public BufferedImage getOverlay() {
             return overlay;
@@ -78,9 +82,8 @@ public class GUI {
             Graphics2D g2 = (Graphics2D) g;
 
             AlphaComposite ac = java.awt.AlphaComposite.getInstance(AlphaComposite.SRC_OVER, 0.5F);
-            g2  .setComposite(ac);
+            g2.setComposite(ac);
             g.setColor(Color.RED);
-            g.drawRect(100, 100, 10, 10);
             g.drawImage(overlay, 0, 0, null);
         }
 
