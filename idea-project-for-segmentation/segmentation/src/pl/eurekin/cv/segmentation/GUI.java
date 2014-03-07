@@ -109,6 +109,8 @@ public class GUI {
                     paintDotAt(event.getPoint(), FOREGROUND);
                 } else if ((event.getModifiersEx() & MouseEvent.BUTTON3_DOWN_MASK) != 0) {
                     paintDotAt(event.getPoint(), BACKGROUND);
+                }else if ((event.getModifiersEx() & MouseEvent.BUTTON2_DOWN_MASK) != 0) {
+                    eraseDotAt(event.getPoint());
                 }
                 l.repaint();
             }
@@ -118,7 +120,21 @@ public class GUI {
             int d = 15, r = d/2;
             int x = point.x - r, y = point.y - r, w = d, h = d;
             Graphics2D g = (Graphics2D) overlay.getGraphics();
+
             g.setColor(color);
+            g.fillOval(x, y, w, h);
+            g.dispose();
+        }
+
+
+        private void eraseDotAt(Point point) {
+            int d = 15, r = d/2;
+            int x = point.x - r, y = point.y - r, w = d, h = d;
+            Graphics2D g = (Graphics2D) overlay.getGraphics();
+            int type = AlphaComposite.CLEAR;
+            AlphaComposite composite =
+                    AlphaComposite.getInstance(type, 0f);
+            g.setComposite(composite);
             g.fillOval(x, y, w, h);
             g.dispose();
         }

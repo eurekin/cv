@@ -4,14 +4,16 @@ import javax.swing.*;
 import java.awt.*;
 import java.awt.image.BufferedImage;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.LinkedList;
 
 public class Segmentation {
-    private static final double A_LOT_BUT_SHOULD_BE_K = 100;
+    private static final int A_LOT_BUT_SHOULD_BE_K = Integer.MAX_VALUE;
     private final int w;
     private final int h;
     private final BufferedImage image;
+    private final int lambda = 10;
     Node source, terminal;
     Node[][] nodes;
     int[] histogramBg = new int[255];
@@ -60,13 +62,15 @@ public class Segmentation {
                 } else {
                     if ((histVal = histogramFg[intensity(image.getRGB(x, y))]) > 0) {
                         double prob = (double) histVal / (double) sumBg;
-                        weightProbFg[x][y] = Math.max(-Math.log(prob), 0d);
-                        addEdge(terminal, node, Math.max(-Math.log(prob), 0d));
+                        int val = (int) Math.max(-Math.log(prob), 0d) * lambda;
+                        weightProbFg[x][y] = val;
+                        addEdge(source, node, val);
                     }
                     if ((histVal = histogramBg[intensity(image.getRGB(x, y))]) > 0) {
                         double prob = (double) histVal / (double) sumBg;
-                        weightProbBg[x][y] = Math.max(-Math.log(prob), 0d);
-                        addEdge(source, node, Math.max(-Math.log(prob), 0d));
+                        int val = (int) Math.max(-Math.log(prob), 0d) * lambda;
+                        weightProbBg[x][y] = val;
+                        addEdge(terminal, node, val);
                     }
                 }
 
@@ -89,7 +93,7 @@ public class Segmentation {
 
                 if (x < width - 1) {
                     Node r = nodes[x + 1][y];
-                    double norm1 = norm(intensity(image.getRGB(x, y)), intensity(image.getRGB(x + 1, y)));
+                    int norm1 = norm(intensity(image.getRGB(x, y)), intensity(image.getRGB(x + 1, y)));
                     debugWeightsOnEdges[x * 2][y] = norm1;
                     addEdge(n, r, norm1);
 
@@ -102,7 +106,7 @@ public class Segmentation {
                 if (y < height - 1) {
 
                     Node d = nodes[x][y + 1];
-                    double norm2 = norm(intensity(image.getRGB(x, y)), intensity(image.getRGB(x, y + 1)));
+                    int norm2 = norm(intensity(image.getRGB(x, y)), intensity(image.getRGB(x, y + 1)));
                     addEdge(n, d, norm2);
                     debugWeightsOnEdges[x * 2 + 1][y] = norm2;
 
@@ -180,8 +184,13 @@ public class Segmentation {
                 for (Edge edge : visitedEdges)
                     edge.pushFlow(maxFlow);
 
-                if (iterations % 5000 == 0)
-                    lightUpTraversedNodes(visitedNodesSet, iterations);
+                if (iterations % 5000 == 0) {
+                    // This one doesn't really indicate the progress at all
+                    // lightUpTraversedNodes(visitedNodesSet, iterations);
+
+                    // let's try with this one
+                    presentApproximateCut();
+                }
 
                 iterations += 1;
 
@@ -198,7 +207,51 @@ public class Segmentation {
         }
     }
 
-    private synchronized  void safelyPublishResultBackToTheGUIThread() {
+    private void presentApproximateCut() {
+        SwingUtilities.invokeLater(new Runnable() {
+            @Override
+            public void run() {
+                presentApproximateCutOnEDT();
+            }
+
+
+        });
+    }
+
+    private void presentApproximateCutOnEDT() {
+
+        JFrame jFrame = new JFrame("...");
+        jFrame.add(new JPanel() {
+
+            @Override
+            public Dimension getPreferredSize() {
+                return new Dimension(w, h);
+            }
+
+            @Override
+            protected void paintComponent(Graphics g) {
+                super.paintComponent(g);
+                for (Node[] ns : nodes)
+                    for (Node n : ns) {
+                        int nte = 0;
+                        for(Edge e : n.outgoing)
+                            if (e.b != terminal || e.b != source)
+                                nte += 1;
+                        Color mark = nte < 4 ? Color.GREEN : Color.BLACK;
+                        g.setColor(mark);
+                        g.fillRect(n.x, n.y, 1, 1);
+                    }
+            }
+        });
+        jFrame.setResizable(false);
+        jFrame.pack();
+        jFrame.setVisible(true);
+
+
+
+    }
+
+    private synchronized void safelyPublishResultBackToTheGUIThread() {
 
         SwingUtilities.invokeLater(new Runnable() {
             @Override
@@ -285,11 +338,10 @@ public class Segmentation {
         return (int) (Math.random() * max);
     }
 
-    private double norm(int a, int b) {
+    private int norm(int a, int b) {
         double d = a - b;
-        d /= 128;
-        return Math.exp(
-                ((double) -(d * d)));
+        d /= 24;
+        return (int) (Math.exp((-(d * d))) * 100);
     }
 
     private void displayDebugDoubleArrayWithMax(final double[][] probarray, final double max) {
@@ -318,7 +370,7 @@ public class Segmentation {
         jFrame.setVisible(true);
     }
 
-    private  void safelyDisplayDebugProbDensityOf(final double[][] probarray) {
+    private void safelyDisplayDebugProbDensityOf(final double[][] probarray) {
         SwingUtilities.invokeLater(new Runnable() {
             @Override
             public void run() {
@@ -341,7 +393,7 @@ public class Segmentation {
                 super.paintComponent(g);
                 for (int x = 0; x < probarray.length; x++) {
                     for (int y = 0; y < probarray[0].length; y++) {
-                        int v = (int) (probarray[x][y] * 20);
+                        int v = Math.min(255, (int) (probarray[x][y] * 4));
                         g.setColor(new Color(v, v, v));
                         g.fillRect(x, y, 1, 1);
                     }
@@ -436,7 +488,7 @@ public class Segmentation {
                                 + 0.0722 * color.getBlue()));
     }
 
-    void addEdge(Node a, Node b, double capacity) {
+    void addEdge(Node a, Node b, int capacity) {
 
         Edge forward = new Edge(a, b, capacity);
         Edge reverse = new Edge(b, a, capacity);
@@ -454,10 +506,10 @@ public class Segmentation {
     public static class Edge {
         Node a, b;
         Edge reverse;
-        double capacity;
-        double flow;
+        int capacity;
+        int flow;
 
-        public Edge(Node a, Node b, double capacity) {
+        public Edge(Node a, Node b, int capacity) {
             a.addOutgoing(this);
 
             this.a = a;
@@ -507,6 +559,7 @@ public class Segmentation {
         }
 
         public void firstTimeVisit() {
+            Collections.shuffle(outgoing);
             index = 0;
         }
 

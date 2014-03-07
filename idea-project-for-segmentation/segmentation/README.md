@@ -18,11 +18,12 @@ The GUI class has a main method to start the prototype.
 * Run the GUI class - a test image will load and will be displayed in application window
 * Select the foreground by marking some pixels with the left mouse button
 * Select the background using the right mouse button
+* You can undo any painting using the middle mouse button
 * Hit the start button.
 
 During the execution some partial progress will be displayed.
 The final result will show up in a Window with title result.
 
 ## Running example
-![An example screenshot](http://i.imgur.com/6JuWGDe.png "Preview")
+![An example screenshot](http://i.imgur.com/1SgmTUw.png "Preview")
  
