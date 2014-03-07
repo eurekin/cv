@@ -53,11 +53,11 @@ public class Segmentation {
 
                 if (decider.isForeground(x, y)) {
                     // no question here, belongs to fg so connect to S
-                    weightProbFg[x][y] = 1;
+                    weightProbFg[x][y] = 255;
                     addEdge(source, node, A_LOT_BUT_SHOULD_BE_K);
                 } else if (decider.isBackground(x, y)) {
                     // no doubt here as well, background connect to T
-                    weightProbBg[x][y] = 1;
+                    weightProbBg[x][y] = 255;
                     addEdge(terminal, node, A_LOT_BUT_SHOULD_BE_K);
                 } else {
                     if ((histVal = histogramFg[intensity(image.getRGB(x, y))]) > 0) {
